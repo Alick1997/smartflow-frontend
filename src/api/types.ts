@@ -1,6 +1,3 @@
-export const Role = { Admin: 'admin', Tenant: 'tenant' } as const
-export type Role = (typeof Role)[keyof typeof Role]
-
 export const EventType = { MissedCall: 'missed_call', SmsIn: 'sms_in', SmsOut: 'sms_out' } as const
 export type EventType = (typeof EventType)[keyof typeof EventType]
 
@@ -23,13 +20,23 @@ export const EVENT_STATUS_LABEL: Record<EventStatus, string> = {
 export interface User {
   id: string
   email: string
-  role: Role
+  admin: boolean
   tenant_id: string | null
 }
 
-export interface LoginResponse {
-  token: string
-  user: User
+export const AddUserStatus = { Assigned: 'assigned', Invited: 'invited' } as const
+export type AddUserStatus = (typeof AddUserStatus)[keyof typeof AddUserStatus]
+
+export interface AddUserResult {
+  status: AddUserStatus
+}
+
+export const TenantUserStatus = { Active: 'active', Invited: 'invited' } as const
+export type TenantUserStatus = (typeof TenantUserStatus)[keyof typeof TenantUserStatus]
+
+export interface TenantUser {
+  email: string
+  status: TenantUserStatus
 }
 
 export interface Page<T> {

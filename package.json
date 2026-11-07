@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.11",
     "@mantine/core": "^9.7.5",
     "@mantine/hooks": "^9.7.5",
     "@mantine/notifications": "^9.7.5",
@@ -25,6 +26,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "oxlint": "^1.90.0",
     "typescript": "~7.0.2",
-    "vite": "^8.3.6"
+    "vite": "^8.3.6",
+    "wrangler": "^4.158.0"
   }
 }

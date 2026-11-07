@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Anchor, Button, Group, Loader, Modal, PasswordInput, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core'
+import { Anchor, Button, Group, Loader, Modal, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { api } from '../api/endpoints'
-import type { PhoneNumber } from '../api/types'
+import { AddUserStatus, TenantUserStatus, type PhoneNumber, type TenantUser } from '../api/types'
 import { DataTable, type Column } from '../components/DataTable'
 import { StatCard } from '../components/StatCard'
 import { useListParams } from '../hooks/useListParams'
@@ -14,8 +14,10 @@ import { PAGE_SIZE, ROUTES } from '../routes'
 
 type Dialog = 'number' | 'user' | null
 
-const errorMessage = (err: unknown): string =>
-  err instanceof ApiError && err.status === 409 ? 'Already exists' : 'Request failed'
+const errorMessage = (err: unknown): string => {
+  if (err instanceof ApiError && err.status === 409) return 'Already exists, or the user is an admin or belongs to another tenant'
+  return 'Request failed'
+}
 
 export function TenantDetail() {
   const { id = '' } = useParams()
@@ -26,16 +28,16 @@ export function TenantDetail() {
   const [number, setNumber] = useState('')
   const [label, setLabel] = useState('')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
 
   const tenant = useQuery({ queryKey: ['tenant', id], queryFn: () => api.tenant(id) })
   const stats = useQuery({ queryKey: ['stats', id], queryFn: () => api.stats(id) })
   const numbersQuery = { page: list.page, page_size: PAGE_SIZE, tenant_id: id }
+  const users = useQuery({ queryKey: ['tenant-users', id], queryFn: () => api.tenantUsers(id) })
   const numbers = useQuery({ queryKey: ['numbers', numbersQuery], queryFn: () => api.numbers(numbersQuery) })
 
   const close = () => {
     setDialog(null)
-    setNumber(''); setLabel(''); setEmail(''); setPassword('')
+    setNumber(''); setLabel(''); setEmail('')
   }
 
   const toggle = useMutation({
@@ -54,9 +56,10 @@ export function TenantDetail() {
     onError: (err) => notifications.show({ message: errorMessage(err), color: 'gray' }),
   })
   const addUser = useMutation({
-    mutationFn: () => api.createTenantUser(id, email, password),
-    onSuccess: () => {
-      notifications.show({ message: 'User created' })
+    mutationFn: () => api.createTenantUser(id, email),
+    onSuccess: (res) => {
+      notifications.show({ message: res.status === AddUserStatus.Invited ? 'Invitation sent' : 'User added' })
+      void queryClient.invalidateQueries({ queryKey: ['tenant-users', id] })
       close()
     },
     onError: (err) => notifications.show({ message: errorMessage(err), color: 'gray' }),
@@ -73,21 +76,23 @@ export function TenantDetail() {
     { header: 'SMS sent', align: 'right', render: (n) => n.sms_out },
   ]
 
+  const userColumns: Column<TenantUser>[] = [
+    { header: 'Email', render: (u) => u.email },
+    { header: 'Status', render: (u) => (u.status === TenantUserStatus.Invited ? 'Invited' : 'Active') },
+  ]
+
   return (
     <Stack gap="lg">
       <Group justify="space-between">
         <Title order={3}>{t.name}</Title>
-        <Group>
-          <Button variant="default" onClick={() => setDialog('user')}>Add user</Button>
-          <Button
-            variant="default"
-            c={t.active ? 'red.7' : undefined}
-            loading={toggle.isPending}
-            onClick={() => toggle.mutate(!t.active)}
-          >
-            {t.active ? 'Deactivate' : 'Activate'}
-          </Button>
-        </Group>
+        <Button
+          variant="default"
+          c={t.active ? 'red.7' : undefined}
+          loading={toggle.isPending}
+          onClick={() => toggle.mutate(!t.active)}
+        >
+          {t.active ? 'Deactivate' : 'Activate'}
+        </Button>
       </Group>
 
       <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }}>
@@ -117,6 +122,22 @@ export function TenantDetail() {
         onRowClick={(n) => navigate(ROUTES.number(n.id))}
       />
 
+      <Group justify="space-between">
+        <Title order={4}>Users</Title>
+        <Button onClick={() => setDialog('user')}>Add user</Button>
+      </Group>
+      <DataTable
+        columns={userColumns}
+        rows={users.data}
+        rowKey={(u) => u.email}
+        loading={users.isLoading}
+        error={users.isError}
+        page={1}
+        pageSize={users.data?.length || 1}
+        total={users.data?.length ?? 0}
+        onPage={() => undefined}
+      />
+
       <Modal opened={dialog === 'number'} onClose={close} title="Add number">
         <Stack>
           <TextInput
@@ -137,14 +158,8 @@ export function TenantDetail() {
       <Modal opened={dialog === 'user'} onClose={close} title="Add user">
         <Stack>
           <TextInput label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-autofocus />
-          <PasswordInput
-            label="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            error={password && password.length < 10 ? 'At least 10 characters' : undefined}
-          />
-          <Button onClick={() => addUser.mutate()} loading={addUser.isPending} disabled={!email.includes('@') || password.length < 10}>
-            Create
+          <Button onClick={() => addUser.mutate()} loading={addUser.isPending} disabled={!email.includes('@')}>
+            Invite
           </Button>
         </Stack>
       </Modal>

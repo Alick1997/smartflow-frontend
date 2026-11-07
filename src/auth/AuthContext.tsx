@@ -1,50 +1,53 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useAuth as useClerkAuth } from '@clerk/clerk-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ApiError, setTokenGetter } from '../api/client'
 import { api } from '../api/endpoints'
-import { setUnauthorizedHandler, tokenStore } from '../api/client'
-import { Role, type User } from '../api/types'
+import type { User } from '../api/types'
 
 interface AuthState {
   user: User | null
+  signedIn: boolean
   loading: boolean
+  noAccess: boolean
   isAdmin: boolean
-  login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
 
+// Clerk proves who is signed in; the backend decides whether that person has access and whether they are an admin.
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { isLoaded, isSignedIn, getToken, signOut } = useClerkAuth()
   const queryClient = useQueryClient()
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState<boolean>(tokenStore.get() !== null)
-
-  const clear = useCallback(() => {
-    tokenStore.clear()
-    setUser(null)
-    queryClient.clear()
-  }, [queryClient])
+  const [tokenReady, setTokenReady] = useState(false)
 
   useEffect(() => {
-    setUnauthorizedHandler(clear)
-    if (!tokenStore.get()) return
-    api.me().then(setUser).catch(clear).finally(() => setLoading(false))
-  }, [clear])
+    setTokenGetter(() => getToken())
+    setTokenReady(true)
+  }, [getToken])
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await api.login(email, password)
-    tokenStore.set(res.token)
-    setUser(res.user)
-  }, [])
+  const me = useQuery({
+    queryKey: ['me'],
+    queryFn: api.me,
+    enabled: Boolean(isSignedIn) && tokenReady,
+  })
 
   const logout = useCallback(async () => {
-    await api.logout().catch(() => undefined)
-    clear()
-  }, [clear])
+    await signOut()
+    queryClient.clear()
+  }, [signOut, queryClient])
 
-  const value = useMemo(
-    () => ({ user, loading, isAdmin: user?.role === Role.Admin, login, logout }),
-    [user, loading, login, logout],
+  const value = useMemo<AuthState>(
+    () => ({
+      user: me.data ?? null,
+      signedIn: Boolean(isSignedIn),
+      loading: !isLoaded || (Boolean(isSignedIn) && !me.isFetched),
+      noAccess: me.error instanceof ApiError && me.error.status === 403,
+      isAdmin: me.data?.admin === true,
+      logout,
+    }),
+    [me.data, me.error, me.isFetched, isSignedIn, isLoaded, logout],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

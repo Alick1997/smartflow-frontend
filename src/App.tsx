@@ -6,6 +6,7 @@ import { ContactDetail } from './pages/ContactDetail'
 import { Contacts } from './pages/Contacts'
 import { Events } from './pages/Events'
 import { Login } from './pages/Login'
+import { NoAccess } from './pages/NoAccess'
 import { NumberDetail } from './pages/NumberDetail'
 import { Numbers } from './pages/Numbers'
 import { Overview } from './pages/Overview'
@@ -14,14 +15,16 @@ import { Tenants } from './pages/Tenants'
 import { ROUTES } from './routes'
 
 export function App() {
-  const { user, loading, isAdmin } = useAuth()
+  const { user, signedIn, loading, noAccess, isAdmin } = useAuth()
 
   if (loading) return <Center mih="100vh"><Loader size="sm" /></Center>
+
+  if (noAccess) return <NoAccess />
 
   return (
     <Routes>
       <Route path={ROUTES.login} element={<Login />} />
-      {user ? (
+      {signedIn && user ? (
         <Route element={<Layout />}>
           <Route index element={<Overview />} />
           <Route path="numbers" element={<Numbers />} />

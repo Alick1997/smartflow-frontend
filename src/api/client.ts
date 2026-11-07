@@ -1,6 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
-const TOKEN_KEY = 'mc_token'
-
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
 export class ApiError extends Error {
   readonly status: number
   constructor(status: number, message: string) {
@@ -9,10 +7,11 @@ export class ApiError extends Error {
   }
 }
 
-export const tokenStore = {
-  get: (): string | null => localStorage.getItem(TOKEN_KEY),
-  set: (token: string): void => localStorage.setItem(TOKEN_KEY, token),
-  clear: (): void => localStorage.removeItem(TOKEN_KEY),
+type TokenGetter = () => Promise<string | null>
+let getToken: TokenGetter = () => Promise.resolve(null)
+
+export function setTokenGetter(fn: TokenGetter): void {
+  getToken = fn
 }
 
 type Params = Record<string, string | number | boolean | undefined>
@@ -26,13 +25,8 @@ export function toQuery(params: Params): string {
   return s ? `?${s}` : ''
 }
 
-let onUnauthorized: () => void = () => {}
-export function setUnauthorizedHandler(fn: () => void): void {
-  onUnauthorized = fn
-}
-
 export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const token = tokenStore.get()
+  const token = await getToken()
   const res = await fetch(`${BASE_URL}/api/v1${path}`, {
     method,
     headers: {
@@ -41,7 +35,6 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  if (res.status === 401 && token) onUnauthorized()
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string }
     throw new ApiError(res.status, data.error ?? 'Request failed')

@@ -1,12 +1,10 @@
 import { request, toQuery } from './client'
 import type {
-  AppEvent, Contact, ContactsQuery, EventsQuery, ListQuery, LoginResponse, Overview, Page,
-  PhoneNumber, SmsResponseInput, Stats, Tenant, TenantsQuery, User,
+  AddUserResult, AppEvent, Contact, ContactsQuery, EventsQuery, ListQuery, Overview, Page,
+  PhoneNumber, SmsResponseInput, Stats, Tenant, TenantsQuery, TenantUser, User,
 } from './types'
 
 export const api = {
-  login: (email: string, password: string) => request<LoginResponse>('POST', '/auth/login', { email, password }),
-  logout: () => request<void>('POST', '/auth/logout'),
   me: () => request<User>('GET', '/me'),
   stats: (tenantId?: string) => request<Stats>('GET', `/stats${toQuery({ tenant_id: tenantId })}`),
 
@@ -24,8 +22,9 @@ export const api = {
   tenant: (id: string) => request<Tenant>('GET', `/admin/tenants/${id}`),
   createTenant: (name: string) => request<Tenant>('POST', '/admin/tenants', { name }),
   setTenantActive: (id: string, active: boolean) => request<Tenant>('PATCH', `/admin/tenants/${id}`, { active }),
-  createTenantUser: (id: string, email: string, password: string) =>
-    request<User>('POST', `/admin/tenants/${id}/users`, { email, password }),
+  tenantUsers: (id: string) => request<TenantUser[]>('GET', `/admin/tenants/${id}/users`),
+  createTenantUser: (id: string, email: string) =>
+    request<AddUserResult>('POST', `/admin/tenants/${id}/users`, { email }),
   createTenantNumber: (id: string, number: string, label: string) =>
     request<{ id: string }>('POST', `/admin/tenants/${id}/numbers`, { number, label }),
 }
