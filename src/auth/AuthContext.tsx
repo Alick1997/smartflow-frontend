@@ -10,6 +10,8 @@ interface AuthState {
   signedIn: boolean
   loading: boolean
   noAccess: boolean
+  failed: boolean
+  retry: () => void
   isAdmin: boolean
   logout: () => Promise<void>
 }
@@ -44,10 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signedIn: Boolean(isSignedIn),
       loading: !isLoaded || (Boolean(isSignedIn) && !me.isFetched),
       noAccess: me.error instanceof ApiError && me.error.status === 403,
+      failed: me.isError && !(me.error instanceof ApiError && me.error.status === 403),
+      retry: () => void me.refetch(),
       isAdmin: me.data?.admin === true,
       logout,
     }),
-    [me.data, me.error, me.isFetched, isSignedIn, isLoaded, logout],
+    [me, isSignedIn, isLoaded, logout],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
